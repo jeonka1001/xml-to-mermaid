@@ -1,0 +1,362 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  HansolXmlToImage2 single-file version (default package) - Maven build.
+    HansolXmlToImage2.java      conversion + CLI
+    HansolXmlToImage2Gui.java   GUI (Swing), uses the classes of HansolXmlToImage2.java
+
+  Build:  mvn clean package     -> target/hansol-xml-to-image2-single.jar  (Java 8 bytecode, CLI + GUI)
+  CLI:    java -jar target/hansol-xml-to-image2-single.jar [options] input.xml output.mmd|md|png|jpg|svg|pdf [TD|LR|BT|RL]
+          java -jar target/hansol-xml-to-image2-single.jar -h        (options and usage)
+  GUI:    java -cp target/hansol-xml-to-image2-single.jar HansolXmlToImage2Gui
+  Without Maven: javac -encoding UTF-8 *.java  then  java HansolXmlToImage2 ...  /  java HansolXmlToImage2Gui
+
+  Every *.java file in this folder is compiled (no src/main/java layout).
+  Maven 3.1.0 or newer (plugin versions chosen for Maven 3.1.0). JDK 1.8 recommended;
+  with JDK 9+ the jdk9+ profile compiles with release 8 (Java 8 API only).
+  Optional runtime settings for CLI and GUI (not needed to build):
+    -Dhansol.rules=node-types.properties   NodeType rules (built-in defaults otherwise)
+    -Dmermaid.config=mermaid-config.json   Mermaid render settings
+    -Dmermaid.cli=.../@mermaid-js/mermaid-cli/src/cli.js -Dnode.executable=.../node   image output (mermaid-cli 11.6.0)
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>hansol</groupId>
+  <artifactId>hansol-xml-to-image2-single</artifactId>
+  <version>2.1.0</version>
+  <packaging>jar</packaging>
+  <name>HansolXmlToImage2 (single file)</name>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.source>1.8</maven.compiler.source>
+    <maven.compiler.target>1.8</maven.compiler.target>
+    <main.class>HansolXmlToImage2</main.class>
+    <project.build.outputTimestamp>2026-10-05T00:00:00Z</project.build.outputTimestamp>
+    <!--
+      Image rendering runtime installed by "mvn package" into target/mermaid (frontend-maven-plugin):
+      Node, mermaid-cli + mermaid (pinned), chrome-headless-shell. The code finds it next to the jar.
+      Skip with -Dskip.mermaid=true (MD-only builds or offline). Internal mirrors: override the URLs below.
+    -->
+    <!-- frontend-maven-plugin: 1.6 to 1.11.3 support Maven 3.1.0 (1.12.0+ requires Maven 3.6.0).
+         Use any of them that your Maven repository (mirror) provides. -->
+    <frontend.plugin.version>1.6</frontend.plugin.version>
+    <mermaid.dir>${project.build.directory}/mermaid</mermaid.dir>
+    <mermaid.node.version>v22.17.1</mermaid.node.version>
+    <mermaid.cli.version>11.6.0</mermaid.cli.version>
+    <mermaid.version>11.6.0</mermaid.version>
+    <mermaid.puppeteer.version>23</mermaid.puppeteer.version>
+    <skip.mermaid>false</skip.mermaid>
+    <!-- Node archive root (same layout as nodejs.org/dist: v22.23.3/node-v22.23.3-win-x64.zip) -->
+    <nodeDownloadRoot>https://nodejs.org/dist/</nodeDownloadRoot>
+    <!-- settings.xml server id with credentials for nodeDownloadRoot; empty = no authentication -->
+    <mermaid.node.serverId></mermaid.node.serverId>
+    <!-- passed as npm_config_registry (an npmRegistryURL argument would be forwarded to "npm exec" commands) -->
+    <mermaid.npm.registry>https://registry.npmjs.org/</mermaid.npm.registry>
+    <!-- chrome-headless-shell archive root (same layout as Chrome for Testing:
+         131.0.6778.204/win64/chrome-headless-shell-win64.zip) -->
+    <mermaid.chrome.downloadBaseUrl>https://storage.googleapis.com/chrome-for-testing-public</mermaid.chrome.downloadBaseUrl>
+    <!--
+      Internal Maven repositories (see the repositories section). Set the real URLs in settings.xml
+      (active profile) or with -D; credentials go to settings.xml servers with the same ids.
+    -->
+    <repository.public.url>YOUR_REPOSITORY_PUBLIC_URL</repository.public.url>
+    <repository.maven-depen.url>YOUR_REPOSITORY_MAVEN_DEPEN_URL</repository.maven-depen.url>
+  </properties>
+
+  <!--
+    Internal repositories. Maven has no per-plugin repository setting: it tries the repositories in
+    declaration order and uses the first one that has the artifact.
+      repository-public       all Maven plugins (compiler, jar, resources, ...)
+      repository-maven-depen  mermaid runtime plugin (frontend-maven-plugin) and its dependencies
+    "central" (Maven Central) is redefined as disabled so that no request leaves the internal network.
+  -->
+  <repositories>
+    <repository>
+      <id>repository-public</id>
+      <url>${repository.public.url}</url>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
+    <repository>
+      <id>central</id>
+      <url>https://repo.maven.apache.org/maven2</url>
+      <releases>
+        <enabled>false</enabled>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
+  </repositories>
+  <pluginRepositories>
+    <pluginRepository>
+      <id>repository-public</id>
+      <url>${repository.public.url}</url>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </pluginRepository>
+    <pluginRepository>
+      <id>repository-maven-depen</id>
+      <url>${repository.maven-depen.url}</url>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </pluginRepository>
+    <pluginRepository>
+      <id>central</id>
+      <url>https://repo.maven.apache.org/maven2</url>
+      <releases>
+        <enabled>false</enabled>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </pluginRepository>
+  </pluginRepositories>
+
+  <build>
+    <sourceDirectory>${project.basedir}</sourceDirectory>
+    <finalName>${project.artifactId}</finalName>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-clean-plugin</artifactId>
+          <version>3.1.0</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-resources-plugin</artifactId>
+          <version>3.2.0</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <version>2.22.2</version>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-install-plugin</artifactId>
+          <version>2.5.2</version>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+    <plugins>
+      <!-- Installs the image rendering runtime into ${mermaid.dir} (see properties). -->
+      <plugin>
+        <groupId>com.github.eirslett</groupId>
+        <artifactId>frontend-maven-plugin</artifactId>
+        <version>${frontend.plugin.version}</version>
+        <configuration>
+          <installDirectory>${mermaid.dir}</installDirectory>
+          <workingDirectory>${mermaid.dir}</workingDirectory>
+        </configuration>
+        <executions>
+          <execution>
+            <id>mermaid-node</id>
+            <goals>
+              <goal>install-node-and-npm</goal>
+            </goals>
+            <configuration>
+              <skip>${skip.mermaid}</skip>
+              <nodeVersion>${mermaid.node.version}</nodeVersion>
+              <serverId>${mermaid.node.serverId}</serverId>
+            </configuration>
+          </execution>
+          <execution>
+            <id>mermaid-cli</id>
+            <goals>
+              <goal>npm</goal>
+            </goals>
+            <configuration>
+              <skip>${skip.mermaid}</skip>
+              <!-- prefix . (= ${mermaid.dir}): never install into a package.json/node_modules of a parent folder.
+                   No quotes: plugin versions before 1.10 pass them through literally.
+                   mermaid is pinned at the top level, so mermaid-cli (mermaid ^11.0.2) uses ${mermaid.version}.
+                   The browser is installed by the next execution, into ${mermaid.dir}/chrome. -->
+              <arguments>install --prefix . --omit=dev --no-audit --no-fund mermaid@${mermaid.version} @mermaid-js/mermaid-cli@${mermaid.cli.version} puppeteer@${mermaid.puppeteer.version}</arguments>
+              <environmentVariables>
+                <PUPPETEER_SKIP_DOWNLOAD>true</PUPPETEER_SKIP_DOWNLOAD>
+                <npm_config_registry>${mermaid.npm.registry}</npm_config_registry>
+              </environmentVariables>
+            </configuration>
+          </execution>
+          <execution>
+            <id>mermaid-chrome</id>
+            <goals>
+              <goal>npm</goal>
+            </goals>
+            <configuration>
+              <skip>${skip.mermaid}</skip>
+              <!-- chrome-headless-shell version pinned by the installed Puppeteer.
+                   "npm exec" instead of the npx goal, which plugin versions before 1.10.0 lack.
+                   yes=false: fail instead of downloading another Puppeteer when the local one is missing. -->
+              <arguments>exec --yes=false -- puppeteer browsers install chrome-headless-shell --base-url ${mermaid.chrome.downloadBaseUrl}</arguments>
+              <environmentVariables>
+                <PUPPETEER_CACHE_DIR>${mermaid.dir}/chrome</PUPPETEER_CACHE_DIR>
+                <npm_config_registry>${mermaid.npm.registry}</npm_config_registry>
+              </environmentVariables>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.8.1</version>
+        <configuration>
+          <!-- Only the .java files directly in this folder (never target/ or subfolders) -->
+          <includes>
+            <include>*.java</include>
+          </includes>
+          <showWarnings>true</showWarnings>
+          <compilerArgs>
+            <!-- -options: JDK 21+ warns that release 8 is obsolete -->
+            <arg>-Xlint:all,-options</arg>
+          </compilerArgs>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.2.2</version>
+        <configuration>
+          <archive>
+            <manifest>
+              <mainClass>${main.class}</mainClass>
+            </manifest>
+          </archive>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+  <profiles>
+    <!-- JDK 9+: compile against the Java 8 API (javac release 8). -->
+    <profile>
+      <id>jdk9+</id>
+      <activation>
+        <jdk>[9,)</jdk>
+      </activation>
+      <properties>
+        <maven.compiler.release>8</maven.compiler.release>
+      </properties>
+    </profile>
+    <!--
+      Use a Node.js already installed on this PC instead of downloading it.
+        mvn clean package -Plocal-node -Dmermaid.local.node.dir="C:\Program Files\nodejs"
+      (or add local-node to activeProfiles and the property to a profile in settings.xml).
+      The folder must contain node.exe and node_modules/npm, and its version must equal
+      mermaid.node.version: frontend-maven-plugin then finds it in target/mermaid/node and skips the download.
+    -->
+    <profile>
+      <id>local-node</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-resources-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>copy-local-node</id>
+                <phase>initialize</phase>
+                <goals>
+                  <goal>copy-resources</goal>
+                </goals>
+                <configuration>
+                  <skip>${skip.mermaid}</skip>
+                  <outputDirectory>${mermaid.dir}/node</outputDirectory>
+                  <resources>
+                    <resource>
+                      <directory>${mermaid.local.node.dir}</directory>
+                      <filtering>false</filtering>
+                      <includes>
+                        <include>node.exe</include>
+                        <include>node</include>
+                        <include>node_modules/npm/**</include>
+                      </includes>
+                    </resource>
+                  </resources>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <!--
+      Use an already prepared mermaid-cli installation (a folder with node_modules, for example an
+      extracted archive) instead of installing npm packages from a registry.
+        mvn clean package -Plocal-mermaid -Dmermaid.local.dir=C:\tools\mermaid
+      Copied into target/mermaid: package.json, node_modules (must contain @mermaid-js/mermaid-cli,
+      mermaid, puppeteer) and chrome (Puppeteer cache layout:
+      chrome/chrome-headless-shell/win64-131.0.6778.204/chrome-headless-shell-win64/...).
+      node_modules/**/.bin is not copied (symlinks on Linux/macOS; not used at runtime), so both npm
+      steps are skipped and the folder must already contain chrome.
+      Node still comes from nodeDownloadRoot or the local-node profile.
+      The versions actually used are logged (and a warning is written) when rendering.
+    -->
+    <profile>
+      <id>local-mermaid</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-resources-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>copy-local-mermaid</id>
+                <phase>initialize</phase>
+                <goals>
+                  <goal>copy-resources</goal>
+                </goals>
+                <configuration>
+                  <skip>${skip.mermaid}</skip>
+                  <outputDirectory>${mermaid.dir}</outputDirectory>
+                  <resources>
+                    <resource>
+                      <directory>${mermaid.local.dir}</directory>
+                      <filtering>false</filtering>
+                      <includes>
+                        <include>package.json</include>
+                        <include>node_modules/**</include>
+                        <include>chrome/**</include>
+                      </includes>
+                      <excludes>
+                        <exclude>node_modules/**/.bin/**</exclude>
+                      </excludes>
+                    </resource>
+                  </resources>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+          <plugin>
+            <groupId>com.github.eirslett</groupId>
+            <artifactId>frontend-maven-plugin</artifactId>
+            <executions>
+              <!-- packages and browser come from mermaid.local.dir -->
+              <execution>
+                <id>mermaid-cli</id>
+                <configuration>
+                  <skip>true</skip>
+                </configuration>
+              </execution>
+              <execution>
+                <id>mermaid-chrome</id>
+                <configuration>
+                  <skip>true</skip>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
+</project>
