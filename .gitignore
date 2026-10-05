@@ -1,0 +1,6 @@
+# Build outputs and download caches (rebuilt by the build scripts; too large for Git)
+**/dist-win2/
+**/.cache/
+**/target/
+**/build/
+.DS_Store
