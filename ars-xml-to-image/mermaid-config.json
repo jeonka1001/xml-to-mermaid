@@ -1,0 +1,9 @@
+{
+  "theme": "default",
+  "fontFamily": "\"Malgun Gothic\", \"맑은 고딕\", \"Apple SD Gothic Neo\", sans-serif",
+  "maxTextSize": 1000000,
+  "maxEdges": 5000,
+  "flowchart": {
+    "useMaxWidth": false
+  }
+}

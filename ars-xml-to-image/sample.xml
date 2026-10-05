@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Synthetic example only; not a reconstruction of the actual ARS scenario. -->
+<Diagram Version="14">
+  <Nodes>
+    <Node Id="0" NodeType="StartNode"><Text>시작</Text></Node>
+    <Node Id="2" NodeType="ScriptNode"><Text>입력 확인</Text></Node>
+    <Node Id="1" NodeType="ScriptNode"><Text>안내 멘트 설정</Text></Node>
+  </Nodes>
+  <Links>
+    <Link Id="1"><Text/><Origin Id="0"/><Destination Id="2"/></Link>
+    <Link Id="9"><Text>ok</Text><Origin Id="2"/><Destination Id="1"/></Link>
+  </Links>
+</Diagram>
